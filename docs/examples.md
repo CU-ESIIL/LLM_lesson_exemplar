@@ -1,110 +1,139 @@
-# UI Examples
+# Examples
 
-This page contains small, copyable patterns that are compatible with a standard MkDocs + Material setup.
+This page contains examples for using the geospatial harmonization tools in this repository.
 
-## Hoverable button
+---
 
-Use this for a small call-to-action with a subtle hover effect.
+## Geospatial Data Harmonization
 
-[Back to Home](index.md){ .md-button .oasis-hover-button }
+The [`geospatial_harmonizer`](../src/geospatial_harmonizer.py) module helps harmonize multiple geospatial datasets by projecting them to a common CRS, clipping to a common extent, and creating visualizations.
 
-```md
-[Back to Home](index.md){ .md-button .oasis-hover-button }
+### Running the Colorado Example
+
+The main example harmonizes three datasets for Colorado fire risk analysis:
+
+```bash
+python examples/colorado_harmonization.py
 ```
 
-## Responsive iframe embed
+This downloads and processes:
+- Wildfire Hazard Potential (raster) from GeoPlatform ImageServer
+- MTBS Burned Area Boundaries (vector, rasterized) from USGS
+- Microsoft Building Footprints (vector, rasterized) for Colorado
 
-Use this wrapper to keep embedded content responsive.
+Output is saved to `output/colorado_harmonized_output/`.
 
-<div class="oasis-embed">
-  <iframe
-    title="OpenStreetMap example embed"
-    src="https://www.openstreetmap.org/export/embed.html?bbox=-105.3%2C39.9%2C-104.9%2C40.1&amp;layer=mapnik"
-    loading="lazy"
-    allowfullscreen>
-  </iframe>
-</div>
+### Programmatic Usage
 
-```html
-<div class="oasis-embed">
-  <iframe
-    title="OpenStreetMap example embed"
-    src="https://www.openstreetmap.org/export/embed.html?bbox=-105.3%2C39.9%2C-104.9%2C40.1&amp;layer=mapnik"
-    loading="lazy"
-    allowfullscreen>
-  </iframe>
-</div>
+Import the harmonization functions and run a custom workflow:
+
+```python
+from pathlib import Path
+from src.geospatial_harmonizer import (
+    DatasetSpec,
+    ExampleWorkflow,
+    run_harmonization_example,
+)
+
+# Define your target grid
+TARGET_CRS = "EPSG:4326"
+TARGET_EXTENT = (-109.05, 36.99, -102.04, 41.01)  # Colorado bounding box
+TARGET_RESOLUTION = 0.00243  # ~270m in degrees
+OUTPUT_DIR = Path("./my_harmonized_output")
+
+# Define datasets to harmonize
+DATASETS = [
+    DatasetSpec(
+        name="my_raster",
+        url="https://example.com/data.tif",
+        data_type="raster",
+    ),
+    DatasetSpec(
+        name="my_vector",
+        url="https://example.com/data.zip",
+        data_type="vector",
+        rasterize=True,
+        burn_value=1,
+    ),
+]
+
+# Run the workflow
+workflow = ExampleWorkflow(
+    name="my_workflow",
+    datasets=DATASETS,
+    target_crs=TARGET_CRS,
+    target_extent=TARGET_EXTENT,
+    target_resolution=TARGET_RESOLUTION,
+    output_dir=OUTPUT_DIR,
+    create_visualization=True,
+    verbose=True,
+)
+
+output_files = run_harmonization_example(workflow)
 ```
 
-## Card grid
+### Supported Data Types
 
-Use card grids to present parallel links or content categories.
+- **Raster**: GeoTIFF, COG, IMG (downloaded and harmonized)
+- **Vector**: GeoJSON, Shapefile (rasterized to match raster grid)
+- **Archives**: ZIP files (automatically extracted)
 
-<div class="grid cards" markdown>
+### ArcGIS ImageServer Support
 
-- **Guide**
+The harmonizer can download directly from ArcGIS ImageServer endpoints:
 
-  ---
-
-  Link short onboarding content.
-
-- **Workflow**
-
-  ---
-
-  Summarize repeatable project steps.
-
-- **Reference**
-
-  ---
-
-  Point to key files and definitions.
-
-</div>
-
-```md
-<div class="grid cards" markdown>
-
-- **Guide**
-
-  ---
-
-  Link short onboarding content.
-
-- **Workflow**
-
-  ---
-
-  Summarize repeatable project steps.
-
-- **Reference**
-
-  ---
-
-  Point to key files and definitions.
-
-</div>
+```python
+DATASETS = [
+    DatasetSpec(
+        name="wildfire_hazard",
+        url="https://imagery.geoplatform.gov/iipp/rest/services/Fire_Aviation/USFS_EDW_RMRS_WildfireHazardPotentialContinuous/ImageServer",
+        data_type="raster",
+    ),
+]
 ```
 
-## Content tabs
+### Output Structure
 
-Use tabs when two or three variants should live in one place.
+After running, the output directory contains:
 
-=== "Python"
+```
+output/
+└── colorado_harmonized_output/
+    ├── harmonized_wildfire_hazard.tif
+    ├── harmonized_mtbs_burned_areas.tif
+    ├── harmonized_building_footprints.tif
+    └── harmonized_visualization.png
+```
 
-    ```python
-    print("Hello from Python")
-    ```
+All harmonized rasters share:
+- Common CRS (e.g., EPSG:4326)
+- Common extent (bounding box)
+- Common resolution (pixel size)
 
-=== "R"
+---
 
-    ```r
-    print("Hello from R")
-    ```
+## Core Functions
 
-## Admonition
+### `build_grid_spec(target_crs, target_extent, target_resolution)`
 
-Use callouts for important notes or caution points.
+Creates a `GridSpec` defining the target coordinate system and resolution.
 
-!!! tip
-    Keep examples short and focused so future contributors can copy and adapt them quickly.
+### `download_file(url, output_dir, verbose)`
+
+Downloads a file from a URL to the specified directory.
+
+### `harmonize_raster(input_path, grid, output_path, verbose)`
+
+Reprojects and resamples a raster to match the target grid.
+
+### `rasterize_vector_to_grid(input_path, grid, output_path, burn_value, verbose)`
+
+Rasterizes vector geometries onto the target grid.
+
+### `create_visualization(outputs, output_path, verbose)`
+
+Creates a multi-panel matplotlib visualization of harmonized outputs.
+
+### `run_harmonization_example(workflow)`
+
+Main entry point that orchestrates the complete harmonization workflow.

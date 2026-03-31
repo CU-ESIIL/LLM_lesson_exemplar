@@ -1,40 +1,148 @@
-# Research Project Template
+# Geospatial Harmonization with LLMs
 
-This repository is a **minimal template for research and data science projects** that combine code, documentation, and a project website.
+This repository demonstrates how large language models (LLMs) can be used to harmonize geospatial datasets from user-provided URLs.
 
-It includes:
+Instead of writing custom scripts for each dataset, the workflow is:
 
-* a clean project structure (`src`, `data`, `docs`, `tests`, etc.)
-* a documentation website built with **MkDocs + Material**
-* automatic deployment to **GitHub Pages** using GitHub Actions
-* development history files (changelog, roadmap, dev log)
-* an `AGENTS.md` file with guidance for AI coding agents
-
-The website is built from the `docs/` folder and automatically deployed when changes are pushed.
+1. A user provides dataset URLs
+2. The LLM inspects the datasets
+3. The LLM decides how to harmonize them (CRS, extent, resolution)
+4. Shared Python functions perform the harmonization
+5. Outputs and maps are generated
 
 ---
 
-# Enable the Website
+## What This Repository Does
 
-After creating a repository from this template you must enable GitHub Pages once.
+The harmonization workflow supports:
 
-1. Go to **Settings → Pages**
-2. Under **Build and deployment**, choose
-   **Source: GitHub Actions**
+* downloading datasets from URLs
+* extracting archives (e.g., ZIP files)
+* identifying raster and vector inputs
+* reprojecting to a common CRS
+* clipping to a shared extent
+* aligning raster resolution
+* optionally rasterizing vector data
+* saving harmonized outputs
+* generating visualizations
 
-The site will then deploy automatically on push.
+---
 
-Your site will appear at:
+## Quick Start
 
+Install dependencies:
+
+```bash
+pip install -r requirements.txt
 ```
-https://<your-username>.github.io/<repository-name>/
+
+Run the example:
+
+```bash
+python examples/colorado_harmonization.py
 ```
 
 ---
 
-# Preview Locally
+## Example: Colorado Fire Risk
+
+This repository includes a worked example that harmonizes:
+
+* wildfire hazard potential (raster)
+* MTBS burned area boundaries (vector)
+* Microsoft building footprints (vector)
+
+All datasets are harmonized to:
+
+* CRS: EPSG:4326
+* Extent: Colorado
+* Common resolution
+
+Goal:
+
+> Identify where wildfire risk overlaps with past fires and human infrastructure.
+
+See:
+
+* `examples/colorado_harmonization.py`
+* `notebooks/colorado_harmonization_demo.ipynb`
+
+---
+
+## How to Use This Repository with an LLM
+
+You can prompt an LLM with something like:
+
+> “Download these datasets, harmonize them to EPSG:4326 over Colorado, and generate a map.”
+
+The LLM should:
+
+* download and inspect the datasets
+* determine raster vs vector inputs
+* ask about resolution mismatches if needed
+* reproject and clip datasets
+* optionally rasterize vector data
+* generate harmonized outputs and a visualization
+
+The expected behavior is defined in:
 
 ```
+AGENTS.md
+```
+
+---
+
+## Repository Structure
+
+```text
+src/
+  geospatial_harmonizer.py   # core harmonization logic
+
+examples/
+  colorado_harmonization.py  # runnable example
+
+docs/
+  # website and documentation
+```
+
+---
+
+## Python API
+
+You can also run harmonization directly in Python:
+
+```python
+from src.geospatial_harmonizer import GeospatialHarmonizer, HarmonizationConfig
+
+config = HarmonizationConfig(
+    input_files=["file1.tif", "file2.tif"],
+    output_crs="EPSG:4326",
+    output_extent=(-109.05, 36.99, -102.04, 41.01),
+    output_dir="./output"
+)
+
+harmonizer = GeospatialHarmonizer(config)
+output_files = harmonizer.harmonize()
+```
+
+---
+
+## Design Philosophy
+
+* The LLM handles decision-making and orchestration
+* The Python code handles geospatial processing
+* Examples demonstrate real workflows
+* The system is reusable across datasets
+
+---
+
+## Documentation Website
+
+This repository includes a documentation site built with MkDocs.
+
+To preview locally:
+
+```bash
 pip install mkdocs mkdocs-material
 mkdocs serve
 ```
@@ -47,4 +155,14 @@ http://127.0.0.1:8000
 
 ---
 
-Use **"Use this template"** on GitHub to start a new project.
+## Notes
+
+This repository is designed as a teaching and demonstration tool.
+
+It shows how LLMs can:
+
+* reason about geospatial data
+* make harmonization decisions
+* orchestrate reusable processing code
+
+rather than requiring custom scripts for each dataset.
