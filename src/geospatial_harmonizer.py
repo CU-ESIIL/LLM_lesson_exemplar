@@ -884,37 +884,43 @@ def _create_visualization_impl(outputs: list[tuple[str, Path]], output_path: Pat
             
             if is_categorical and "fbfm" in name.lower():
                 import src.geospatial_harmonizer as _self
+                from matplotlib.patches import Patch
                 labels_map = _self.DISCOVERED_LABELS or {}
-                # Only use categories actually present in the data
-                present_cats = sorted([int(v) for v in unique_vals.tolist()])
-                # For fuel models: check if we have a custom color map
+                all_cats = sorted([int(v) for v in unique_vals.tolist()])
+                # Build colormap from ALL present values so no pixels are masked/white
                 if "color_map" in style and style["color_map"]:
                     color_map = style["color_map"]
-                    colors = []
-                    for cat in present_cats:
-                        if cat in color_map:
-                            colors.append((color_map[cat][0]/255, color_map[cat][1]/255, color_map[cat][2]/255))
-                        else:
-                            colors.append((0.5, 0.5, 0.5))
+                    colors = [(color_map[c][0]/255, color_map[c][1]/255, color_map[c][2]/255)
+                              if c in color_map else (0.7, 0.7, 0.7)
+                              for c in all_cats]
                     cmap = ListedColormap(colors)
-                    color_bounds = [c - 0.5 for c in present_cats] + [present_cats[-1] + 0.5]
+                    color_bounds = [c - 0.5 for c in all_cats] + [all_cats[-1] + 0.5]
                     norm = BoundaryNorm(color_bounds, cmap.N)
                     im = ax.imshow(masked_data, cmap=cmap, norm=norm, alpha=style["alpha"])
+                    # Patch legend: only named categories, in order, 2 columns
+                    named_cats = [c for c in all_cats if labels_map.get(c, str(c)) != str(c) and c in color_map]
+                    legend_handles = [
+                        Patch(facecolor=(color_map[c][0]/255, color_map[c][1]/255, color_map[c][2]/255),
+                              label=labels_map[c])
+                        for c in named_cats
+                    ]
                 else:
-                    # Fallback to default colormap
-                    n_colors = len(present_cats)
+                    n_colors = len(all_cats)
                     cmap = cm.get_cmap("nipy_spectral", n_colors)
-                    color_bounds = [c - 0.5 for c in present_cats] + [present_cats[-1] + 0.5]
+                    color_bounds = [c - 0.5 for c in all_cats] + [all_cats[-1] + 0.5]
                     norm = BoundaryNorm(color_bounds, cmap.N)
                     im = ax.imshow(masked_data, cmap=cmap, norm=norm, alpha=style["alpha"])
-                # Horizontal colorbar with evenly-spaced ticks and short names
-                max_ticks = 20
-                tick_step = max(1, len(present_cats) // max_ticks)
-                ticks = present_cats[::tick_step]
-                cbar = plt.colorbar(im, ax=ax, ticks=ticks, orientation='horizontal', pad=0.04, fraction=0.046)
-                cbar.ax.set_xticklabels(
-                    [labels_map.get(t, str(t)) for t in ticks],
-                    rotation=45, ha='right', fontsize=6
+                    named_cats = [c for c in all_cats if labels_map.get(c, str(c)) != str(c)]
+                    legend_handles = [
+                        Patch(facecolor=cmap(norm(c)), label=labels_map[c])
+                        for c in named_cats
+                    ]
+                ax.legend(
+                    handles=legend_handles,
+                    loc='upper left', bbox_to_anchor=(1.01, 1), borderaxespad=0,
+                    fontsize=5.5, ncol=2, frameon=True,
+                    title='Fuel Model', title_fontsize=6,
+                    handlelength=1, handleheight=1, handletextpad=0.4, columnspacing=0.5,
                 )
             else:
                 cmap = cm.get_cmap(style["colormap"])
@@ -1161,6 +1167,7 @@ def _create_interactive_visualization_impl(
                     transform=transform,
                     fill=0,
                     dtype=np.uint8,
+                    all_touched=True,
                 )
                 from PIL import Image as PILImage
                 hex_c = style["color"].lstrip("#")
@@ -1176,11 +1183,12 @@ def _create_interactive_visualization_impl(
                 img.save(buf, format='PNG', optimize=True)
                 buf.seek(0)
                 img_base64 = base64.b64encode(buf.getvalue()).decode('ascii')
+                # opacity=1.0 because alpha is already baked into the RGBA pixel data
                 folium.raster_layers.ImageOverlay(
                     image=f"data:image/png;base64,{img_base64}",
                     bounds=[[ymin, xmin], [ymax, xmax]],
                     name=name.replace("_", " ").title(),
-                    opacity=style["fillOpacity"],
+                    opacity=1.0,
                     interactive=False,
                     zindex=i + 10,
                 ).add_to(m)
@@ -1233,6 +1241,13 @@ def _create_interactive_visualization_impl(
 
                     if is_categorical and "fbfm" in name.lower() and style.get("color_map"):
                         color_map = style["color_map"]
+                        # Paint all non-zero pixels light grey first (catches unlabeled artifact codes)
+                        artifact_px = (data > 0) & ~np.isin(data, list(color_map.keys()))
+                        rgba[artifact_px, 0] = 180
+                        rgba[artifact_px, 1] = 180
+                        rgba[artifact_px, 2] = 180
+                        rgba[artifact_px, 3] = alpha_val
+                        # Then paint known categories with their proper colors
                         for cat_val, color in color_map.items():
                             px = data == cat_val
                             rgba[px, 0] = color[0]
@@ -1277,11 +1292,12 @@ def _create_interactive_visualization_impl(
                 img_base64 = base64.b64encode(buf.getvalue()).decode('ascii')
                 
                 # Create image overlay with proper lat/lon bounds using target extent
+                # opacity=1.0 because alpha is already baked into the RGBA pixel data
                 overlay = folium.raster_layers.ImageOverlay(
                     image=f"data:image/png;base64,{img_base64}",
                     bounds=[[bounds[1], bounds[0]], [bounds[3], bounds[2]]],
                     name=name.replace("_", " ").title(),
-                    opacity=style["alpha"],
+                    opacity=1.0,
                     interactive=True,
                     zindex=i + 10  # Above base maps
                 )
@@ -1340,8 +1356,10 @@ def _create_interactive_visualization_impl(
                 labels_map = _self.DISCOVERED_LABELS or {}
                 unique_present = sorted(np.unique(data[data > 0]).tolist())
                 legend_html += f'<div style="margin:4px 0 2px;font-weight:bold;">{name.replace("_", " ").title()}</div>'
-                legend_html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:1px 6px;font-size:10px;">'
-                for v in unique_present:
+                legend_html += '<div style="display:grid;grid-template-columns:1fr 1fr;gap:2px 8px;font-size:11px;">'
+                # Only show values that have a real label or a real color (skip unnamed grey entries)
+                named_present = [v for v in unique_present if v in color_map or labels_map.get(v, str(v)) != str(v)]
+                for v in named_present:
                     label = labels_map.get(v, str(v))
                     if v in color_map:
                         r_c, g_c, b_c = color_map[v][0], color_map[v][1], color_map[v][2]
@@ -1349,8 +1367,8 @@ def _create_interactive_visualization_impl(
                     else:
                         bg = "#aaa"
                     legend_html += (
-                        f'<div style="display:flex;align-items:center;gap:3px;white-space:nowrap;">'
-                        f'<i style="background:{bg};width:10px;height:10px;display:inline-block;flex-shrink:0;"></i>'
+                        f'<div style="display:flex;align-items:center;gap:4px;">'
+                        f'<i style="background:{bg};width:12px;height:12px;display:inline-block;flex-shrink:0;border-radius:2px;"></i>'
                         f'{label}</div>'
                     )
                 legend_html += '</div>'
