@@ -6,7 +6,7 @@ This page contains examples for using the geospatial harmonization tools in this
 
 ## Geospatial Data Harmonization
 
-The [`geospatial_harmonizer`](../src/geospatial_harmonizer.py) module helps harmonize multiple geospatial datasets by projecting them to a common CRS, clipping to a common extent, and creating visualizations.
+The `geospatial_harmonizer` module helps harmonize multiple geospatial datasets by projecting them to a common CRS, clipping to a common extent, and creating visualizations.
 
 ### Running the Colorado Example
 
